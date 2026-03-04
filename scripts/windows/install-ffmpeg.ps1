@@ -5,7 +5,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$projectRootResolved = (Resolve-Path $ProjectRoot).Path
+$projectRootInput = "$ProjectRoot".Trim()
+$projectRootClean = $projectRootInput.Trim('"')
+if ([string]::IsNullOrWhiteSpace($projectRootClean)) {
+  throw 'ProjectRoot is empty.'
+}
+$projectRootResolved = (Resolve-Path -LiteralPath $projectRootClean).Path
 $binDir = Join-Path $projectRootResolved 'bin'
 $ffmpegExe = Join-Path $binDir 'ffmpeg.exe'
 

@@ -6,6 +6,7 @@ set /a STEP_CURRENT=0
 set "CURRENT_STAGE=Initializing"
 
 set "ROOT=%~dp0"
+if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
 cd /d "%ROOT%"
 
 call :log_step "Initialize startup context"
@@ -27,20 +28,20 @@ if errorlevel 1 (
 )
 
 call :log_step "Install dependencies if needed"
-if not exist "%ROOT%node_modules" (
+if not exist "%ROOT%\node_modules" (
   echo [info] Installing dependencies...
   call npm install
   if errorlevel 1 goto :fail
 )
 
-if not exist "%ROOT%node_modules\express" (
+if not exist "%ROOT%\node_modules\express" (
   echo [info] Installing missing backend dependencies...
   call npm install
   if errorlevel 1 goto :fail
 )
 
 call :log_step "Ensure frontend build output exists"
-set "DIST_INDEX=%ROOT%panku\index.html"
+set "DIST_INDEX=%ROOT%\panku\index.html"
 if not exist "%DIST_INDEX%" (
   echo [info] Frontend build output missing. Running npm run build...
   call npm run build
@@ -48,17 +49,17 @@ if not exist "%DIST_INDEX%" (
 )
 
 call :log_step "Ensure local ffmpeg exists"
-set "LOCAL_FFMPEG=%ROOT%bin\ffmpeg.exe"
+set "LOCAL_FFMPEG=%ROOT%\bin\ffmpeg.exe"
 if not exist "%LOCAL_FFMPEG%" (
   echo [info] Local ffmpeg not found. Downloading and installing...
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\windows\install-ffmpeg.ps1" -ProjectRoot "%ROOT%"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\install-ffmpeg.ps1" -ProjectRoot "%ROOT%"
   if errorlevel 1 goto :fail
 )
 
 set "FFMPEG_BIN=%LOCAL_FFMPEG%"
 
 call :log_step "Persist ffmpeg environment variables"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\windows\set-ffmpeg-env.ps1" -FfmpegBin "%LOCAL_FFMPEG%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\set-ffmpeg-env.ps1" -FfmpegBin "%LOCAL_FFMPEG%"
 if errorlevel 1 (
   echo [warn] Failed to persist user environment variables. Continue with current process env.
 )

@@ -5,7 +5,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$ffmpegBinResolved = (Resolve-Path $FfmpegBin).Path
+$ffmpegInput = "$FfmpegBin".Trim()
+$ffmpegClean = $ffmpegInput.Trim('"')
+if ([string]::IsNullOrWhiteSpace($ffmpegClean)) {
+  throw 'FfmpegBin is empty.'
+}
+$ffmpegBinResolved = (Resolve-Path -LiteralPath $ffmpegClean).Path
 $ffmpegDir = Split-Path $ffmpegBinResolved -Parent
 
 if (-not (Test-Path $ffmpegBinResolved)) {
