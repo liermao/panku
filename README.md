@@ -28,6 +28,29 @@ npm run dev
 npm run build
 ```
 
+## Windows One-Click Startup
+
+After cloning the project, double-click:
+
+```text
+start-windows.cmd
+```
+
+Silent mode (no terminal window):
+
+```text
+start-windows-silent.vbs
+```
+
+What it does automatically:
+
+1. Installs npm dependencies if missing.
+2. Builds frontend output (`panku/index.html`) if missing.
+3. Checks `bin/ffmpeg.exe`; if missing, downloads and installs it.
+4. Sets user env `FFMPEG_BIN` and appends ffmpeg directory into user `PATH`.
+5. Starts backend gateway (`npm run server`) with local ffmpeg.
+6. Opens the built frontend page in browser.
+
 ### Lint with [ESLint](https://eslint.org/)
 
 ```sh
