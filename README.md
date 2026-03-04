@@ -36,12 +36,6 @@ After cloning the project, double-click:
 start-windows.cmd
 ```
 
-Silent mode (no terminal window):
-
-```text
-start-windows-silent.vbs
-```
-
 What it does automatically:
 
 1. Installs npm dependencies if missing.
