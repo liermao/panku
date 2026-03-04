@@ -1,0 +1,66 @@
+{
+  "monitor": {
+    "gatewayUrl": "",
+    "displayCount": 7,
+    "autoPlayOnMount": true,
+    "startConcurrency": 7,
+    "recoverConcurrency": 1,
+    "bootstrapMaxWaitMs": 60000,
+    "frameReadyTimeoutMs": 45000,
+    "stallTimeoutMs": 60000,
+    "recoverIntervalMs": 10000,
+    "startCooldownMs": 5000,
+    "pendingRetryDelayMs": 1800,
+    "requestTimeoutMs": 12000,
+    "minRetryIntervalMs": 1200,
+    "retry": {
+      "delayMs": 2000
+    },
+    "cameras": [
+      { "id": "cam-1", "name": "河豚班", "rtspUrl": "rtsp://admin:a12345678@41.1.7.9/cam/realmonitor?channel=1&subtype=1" },
+      { "id": "cam-2", "name": "海星班", "rtspUrl": "rtsp://admin:a12345678@41.1.7.7/cam/realmonitor?channel=28&subtype=1" },
+      { "id": "cam-3", "name": "海马班", "rtspUrl": "rtsp://admin:a12345678@41.1.7.7/cam/realmonitor?channel=30&subtype=1" },
+      { "id": "cam-4", "name": "图鲲班", "rtspUrl": "rtsp://admin:a12345678@41.1.7.9/cam/realmonitor?channel=30&subtype=1" },
+      { "id": "cam-5", "name": "蓝鲸班", "rtspUrl": "rtsp://admin:a12345678@41.1.7.7/cam/realmonitor?channel=9&subtype=1" },
+      { "id": "cam-6", "name": "海鹏班", "rtspUrl": "rtsp://admin:a12345678@41.1.7.9/cam/realmonitor?channel=13&subtype=1" },
+      { "id": "cam-7", "name": "云鹏班", "rtspUrl": "rtsp://admin:a12345678@41.1.7.9/cam/realmonitor?channel=29&subtype=1" }
+    ]
+  },
+  "images": {
+    "teacher": [
+      "/runtime-assets/szll/3.png",
+      "/runtime-assets/szll/4.png",
+      "/runtime-assets/szll/5.png",
+      "/runtime-assets/szll/7.png",
+      "/runtime-assets/szll/8.png",
+      "/runtime-assets/szll/9.png",
+      "/runtime-assets/szll/10.png",
+      "/runtime-assets/szll/11.png",
+      "/runtime-assets/szll/12.png",
+      "/runtime-assets/szll/13.png",
+      "/runtime-assets/szll/14.png",
+      "/runtime-assets/szll/15.png",
+      "/runtime-assets/szll/16.png",
+      "/runtime-assets/szll/17.png",
+      "/runtime-assets/szll/18.png",
+      "/runtime-assets/szll/19.png",
+      "/runtime-assets/szll/20.png",
+      "/runtime-assets/szll/21.png",
+      "/runtime-assets/szll/22.png",
+      "/runtime-assets/szll/23.png"
+    ],
+    "careTeam": [
+      "/runtime-assets/hqtd/1.png",
+      "/runtime-assets/hqtd/2.png",
+      "/runtime-assets/hqtd/3.png",
+      "/runtime-assets/hqtd/4.png",
+      "/runtime-assets/hqtd/5.png",
+      "/runtime-assets/hqtd/6.png",
+      "/runtime-assets/hqtd/7.png",
+      "/runtime-assets/hqtd/8.png",
+      "/runtime-assets/hqtd/9.png",
+      "/runtime-assets/hqtd/10.png"
+    ],
+    "panUai": "/runtime-assets/panUai/jksz.png"
+  }
+}
