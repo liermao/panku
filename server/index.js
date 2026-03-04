@@ -17,6 +17,7 @@ const LOCAL_FFMPEG_NAME = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
 const LOCAL_FFMPEG_BIN = path.resolve(APP_ROOT, 'bin', LOCAL_FFMPEG_NAME)
 const FFMPEG_BIN = process.env.FFMPEG_BIN || (existsSync(LOCAL_FFMPEG_BIN) ? LOCAL_FFMPEG_BIN : 'ffmpeg')
 const HLS_ROOT = process.env.HLS_ROOT || path.resolve(APP_ROOT, 'public', 'hls')
+const FRONTEND_ROOT = process.env.FRONTEND_ROOT || path.resolve(APP_ROOT, 'panku')
 
 app.use(cors())
 app.use(express.json({ limit: '1mb' }))
@@ -30,6 +31,7 @@ app.use((req, _res, next) => {
   next()
 })
 app.use('/hls', express.static(HLS_ROOT, { acceptRanges: false }))
+app.use(express.static(FRONTEND_ROOT, { index: 'index.html' }))
 app.use((error, _req, res, next) => {
   if (error?.status === 416) {
     return res.status(200).end()
@@ -496,6 +498,10 @@ app.get('/api/metrics', (req, res) => {
     runningStreams: streams.size,
     startingStreams: startingStreams.size
   })
+})
+
+app.get('/', (_req, res) => {
+  return res.sendFile(path.join(FRONTEND_ROOT, 'index.html'))
 })
 
 async function bootstrap() {

@@ -4,6 +4,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 set /a STEP_TOTAL=8
 set /a STEP_CURRENT=0
 set "CURRENT_STAGE=Initializing"
+set "FRONTEND_URL=http://127.0.0.1:8080/"
 
 set "ROOT=%~dp0"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
@@ -81,8 +82,8 @@ if errorlevel 1 (
 )
 
 call :log_step "Open frontend page"
-echo [info] Opening built frontend page...
-start "" "%DIST_INDEX%"
+echo [info] Opening frontend URL: %FRONTEND_URL%
+start "" "%FRONTEND_URL%"
 
 echo [ok] Done.
 exit /b 0
