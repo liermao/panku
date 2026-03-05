@@ -3,7 +3,7 @@
   <div class="page-mask"></div>
 
   <div class="home-top-wrap">
-    <div class="home-top" :style="{ width: width + 'px' }">
+    <div class="home-top">
       <div class="left-top">
         <img :src="logo" alt="logo" />
       </div>
@@ -198,7 +198,30 @@ export default {
       }
       return map[code] || '未知天气'
     },
-    async loadWeather() {
+    applyWeatherValue({ location, temp, desc }) {
+      if (typeof location === 'string' && location.trim()) {
+        this.weatherLocation = location.trim()
+      }
+      this.weatherTempText = temp
+      this.weatherDescText = desc
+    },
+    async loadWeatherFromGateway() {
+      const response = await fetch('/api/weather', { cache: 'no-store' })
+      if (!response.ok) {
+        throw new Error(`weather_gateway_${response.status}`)
+      }
+      const data = await response.json()
+      const temp = Number(data?.temperature)
+      const desc = typeof data?.description === 'string' ? data.description : ''
+      const location = typeof data?.location === 'string' ? data.location : ''
+
+      this.applyWeatherValue({
+        location,
+        temp: Number.isFinite(temp) ? `${Math.round(temp)}°C` : '--°C',
+        desc: desc || '天气未知'
+      })
+    },
+    async loadWeatherFromOpenMeteo() {
       const url =
         'https://api.open-meteo.com/v1/forecast?latitude=30.6677&longitude=104.1176&current=temperature_2m,weather_code&timezone=Asia%2FShanghai&forecast_days=1'
       try {
@@ -211,11 +234,31 @@ export default {
         const temp = Number(current.temperature_2m)
         const code = Number(current.weather_code)
 
-        this.weatherTempText = Number.isFinite(temp) ? `${Math.round(temp)}°C` : '--°C'
-        this.weatherDescText = Number.isFinite(code) ? this.mapWeatherCode(code) : '天气未知'
+        this.applyWeatherValue({
+          location: this.weatherLocation || '成华区',
+          temp: Number.isFinite(temp) ? `${Math.round(temp)}°C` : '--°C',
+          desc: Number.isFinite(code) ? this.mapWeatherCode(code) : '天气未知'
+        })
+        return true
       } catch {
-        this.weatherTempText = '--°C'
-        this.weatherDescText = '天气暂不可用'
+        return false
+      }
+    },
+    async loadWeather() {
+      try {
+        await this.loadWeatherFromGateway()
+        return
+      } catch {
+        // fallback to direct browser request
+      }
+
+      const ok = await this.loadWeatherFromOpenMeteo()
+      if (!ok) {
+        this.applyWeatherValue({
+          location: this.weatherLocation || '成华区',
+          temp: '--°C',
+          desc: '天气暂不可用'
+        })
       }
     }
   }
@@ -258,17 +301,17 @@ export default {
   top: 0;
   left: 0;
   width: 100%;
-  height: 0;
-  display: flex;
-  justify-content: center;
+  height: 72px;
   z-index: 9999;
   pointer-events: none;
 }
 
 .home-top {
-  max-width: calc(100vw - 16px);
   margin-top: 8px;
+  width: 100%;
   height: 64px;
+  box-sizing: border-box;
+  padding: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -278,7 +321,6 @@ export default {
     display: flex;
     align-items: center;
     height: 100%;
-    padding-left: 8px;
     pointer-events: auto;
 
     img {
@@ -295,7 +337,6 @@ export default {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    padding-right: 8px;
     pointer-events: auto;
   }
 

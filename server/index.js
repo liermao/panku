@@ -18,6 +18,11 @@ const LOCAL_FFMPEG_BIN = path.resolve(APP_ROOT, 'bin', LOCAL_FFMPEG_NAME)
 const FFMPEG_BIN = process.env.FFMPEG_BIN || (existsSync(LOCAL_FFMPEG_BIN) ? LOCAL_FFMPEG_BIN : 'ffmpeg')
 const HLS_ROOT = process.env.HLS_ROOT || path.resolve(APP_ROOT, 'public', 'hls')
 const FRONTEND_ROOT = process.env.FRONTEND_ROOT || path.resolve(APP_ROOT, 'panku')
+const WEATHER_LATITUDE = Number(process.env.WEATHER_LATITUDE || 30.6677)
+const WEATHER_LONGITUDE = Number(process.env.WEATHER_LONGITUDE || 104.1176)
+const WEATHER_TIMEZONE = process.env.WEATHER_TIMEZONE || 'Asia/Shanghai'
+const WEATHER_LOCATION = process.env.WEATHER_LOCATION || '成华区'
+const WEATHER_TIMEOUT_MS = Number(process.env.WEATHER_TIMEOUT_MS || 8000)
 
 app.use(cors())
 app.use(express.json({ limit: '1mb' }))
@@ -79,6 +84,94 @@ function buildGatewayError(message, diagnostics = []) {
   const error = new Error(message)
   error.diagnostics = diagnostics
   return error
+}
+
+function mapWeatherCode(code) {
+  const map = {
+    0: '晴',
+    1: '晴间多云',
+    2: '局部多云',
+    3: '阴',
+    45: '雾',
+    48: '雾凇',
+    51: '小毛毛雨',
+    53: '毛毛雨',
+    55: '大毛毛雨',
+    56: '小冻毛毛雨',
+    57: '大冻毛毛雨',
+    61: '小雨',
+    63: '中雨',
+    65: '大雨',
+    66: '小冻雨',
+    67: '大冻雨',
+    71: '小雪',
+    73: '中雪',
+    75: '大雪',
+    77: '雪粒',
+    80: '小阵雨',
+    81: '中阵雨',
+    82: '大阵雨',
+    85: '小阵雪',
+    86: '大阵雪',
+    95: '雷阵雨',
+    96: '雷雨夹冰雹',
+    99: '强雷雨夹冰雹'
+  }
+  return map[code] || '未知天气'
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs = WEATHER_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(url, { signal: controller.signal })
+    if (!response.ok) {
+      throw new Error(`status_${response.status}`)
+    }
+    return await response.json()
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function getWeatherFromOpenMeteo() {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_LATITUDE}&longitude=${WEATHER_LONGITUDE}&current=temperature_2m,weather_code&timezone=${encodeURIComponent(WEATHER_TIMEZONE)}&forecast_days=1`
+  const data = await fetchJsonWithTimeout(url)
+  const current = data?.current || {}
+  const temperature = Number(current.temperature_2m)
+  const weatherCode = Number(current.weather_code)
+
+  if (!Number.isFinite(temperature)) {
+    throw new Error('invalid_temperature')
+  }
+
+  return {
+    location: WEATHER_LOCATION,
+    temperature,
+    description: Number.isFinite(weatherCode) ? mapWeatherCode(weatherCode) : '未知天气',
+    source: 'open-meteo'
+  }
+}
+
+async function getWeatherFromWttr() {
+  const url = `https://wttr.in/${encodeURIComponent(WEATHER_LOCATION)}?format=j1`
+  const data = await fetchJsonWithTimeout(url)
+  const current = Array.isArray(data?.current_condition) ? data.current_condition[0] : null
+  const area = Array.isArray(data?.nearest_area) ? data.nearest_area[0] : null
+  const areaName = Array.isArray(area?.areaName) ? area.areaName[0]?.value : ''
+  const desc = Array.isArray(current?.weatherDesc) ? current.weatherDesc[0]?.value : ''
+  const temperature = Number(current?.temp_C)
+
+  if (!Number.isFinite(temperature)) {
+    throw new Error('invalid_temperature')
+  }
+
+  return {
+    location: areaName || WEATHER_LOCATION,
+    temperature,
+    description: desc || '天气未知',
+    source: 'wttr.in'
+  }
 }
 
 async function ensureDir(dir) {
@@ -468,6 +561,27 @@ app.post('/api/stream/stop', (req, res) => {
   }
 
   return res.json({ ok: true })
+})
+
+app.get('/api/weather', async (_req, res) => {
+  try {
+    const weather = await getWeatherFromOpenMeteo()
+    return res.json(weather)
+  } catch (primaryError) {
+    try {
+      const weather = await getWeatherFromWttr()
+      return res.json(weather)
+    } catch (fallbackError) {
+      return res.status(503).json({
+        message: '天气服务暂不可用',
+        location: WEATHER_LOCATION,
+        diagnostics: [
+          primaryError?.message || 'open-meteo_failed',
+          fallbackError?.message || 'wttr_failed'
+        ]
+      })
+    }
+  }
 })
 
 app.get('/api/stream/list', (_req, res) => {
