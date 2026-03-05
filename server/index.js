@@ -36,7 +36,15 @@ app.use((req, _res, next) => {
   next()
 })
 app.use('/hls', express.static(HLS_ROOT, { acceptRanges: false }))
-app.use(express.static(FRONTEND_ROOT, { index: 'index.html' }))
+app.use(express.static(FRONTEND_ROOT, {
+  index: false,
+  setHeaders: (res, filePath) => {
+    const normalized = filePath.replace(/\\/g, '/')
+    if (normalized.endsWith('/index.html') || normalized.endsWith('/runtime-config.json')) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+    }
+  }
+}))
 app.use((error, _req, res, next) => {
   if (error?.status === 416) {
     return res.status(200).end()
@@ -615,7 +623,12 @@ app.get('/api/metrics', (req, res) => {
 })
 
 app.get('/', (_req, res) => {
-  return res.sendFile(path.join(FRONTEND_ROOT, 'index.html'))
+  return res.sendFile(path.join(FRONTEND_ROOT, 'index.html'), {
+    cacheControl: false,
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate'
+    }
+  })
 })
 
 async function bootstrap() {
