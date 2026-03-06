@@ -39,12 +39,12 @@ start-windows.cmd
 What it does automatically:
 
 1. Installs npm dependencies if missing.
-2. Builds frontend output (`panku/index.html`) if missing.
+2. Builds frontend output (`panku/index.html`) on every startup to avoid stale bundle issues.
 3. Checks `bin/ffmpeg.exe`; if missing, downloads and installs it.
 4. Sets user env `FFMPEG_BIN` and appends ffmpeg directory into user `PATH`.
 5. Starts backend gateway (`npm run server`) with local ffmpeg.
 6. Sends startup notification to WeCom webhook.
-7. Opens frontend by local HTTP URL (`http://127.0.0.1:8080/`) to avoid `file://` CORS blank page.
+7. Opens frontend by local HTTP URL (`http://127.0.0.1:8080/`) in fullscreen mode (Edge preferred, Chrome fallback).
 
 ### Lint with [ESLint](https://eslint.org/)
 
