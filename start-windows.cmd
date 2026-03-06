@@ -1,6 +1,11 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
+set "FORCE_BUILD=%FORCE_BUILD%"
+if not defined FORCE_BUILD set "FORCE_BUILD=0"
+if /I "%~1"=="--rebuild" set "FORCE_BUILD=1"
+if /I "%~1"=="-r" set "FORCE_BUILD=1"
+
 set /a STEP_TOTAL=10
 set /a STEP_CURRENT=0
 set "CURRENT_STAGE=Initializing"
@@ -42,10 +47,25 @@ if not exist "%ROOT%\node_modules\express" (
   if errorlevel 1 goto :fail
 )
 
-call :log_step "Build frontend package"
-echo [info] Running npm run build...
-call npm run build
-if errorlevel 1 goto :fail
+call :log_step "Build frontend package if needed"
+set "NEED_BUILD=YES"
+if "%FORCE_BUILD%"=="1" (
+  for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\needs-build.ps1" -ProjectRoot "%ROOT%" -ForceBuild`) do set "NEED_BUILD=%%I"
+) else (
+  for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\needs-build.ps1" -ProjectRoot "%ROOT%"`) do set "NEED_BUILD=%%I"
+)
+
+if /I "%NEED_BUILD%"=="NO" (
+  echo [ok] Frontend bundle is up to date. Skip build.
+) else (
+  if "%FORCE_BUILD%"=="1" (
+    echo [info] FORCE_BUILD enabled. Running npm run build...
+  ) else (
+    echo [info] Frontend source changed or build output missing. Running npm run build...
+  )
+  call npm run build
+  if errorlevel 1 goto :fail
+)
 
 call :log_step "Ensure local ffmpeg exists"
 set "LOCAL_FFMPEG=%ROOT%\bin\ffmpeg.exe"
