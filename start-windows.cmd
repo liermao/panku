@@ -1,10 +1,11 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-set /a STEP_TOTAL=8
+set /a STEP_TOTAL=9
 set /a STEP_CURRENT=0
 set "CURRENT_STAGE=Initializing"
 set "FRONTEND_URL=http://127.0.0.1:8080/?_ts=%RANDOM%%RANDOM%"
+set "WX_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=4bc64e7a-4e64-4872-b3f5-5493049fef6d"
 
 set "ROOT=%~dp0"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
@@ -79,6 +80,18 @@ if errorlevel 1 (
   )
 ) else (
   echo [ok] Backend gateway is already running.
+)
+
+call :log_step "Send startup webhook notification"
+echo [info] Sending WeCom startup notification...
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$uri = '%WX_WEBHOOK_URL%';" ^
+  "$body = @{ msgtype = 'text'; text = @{ content = '未来中心监控大屏已开启，有家长在线观看，请各位老师留意言行举止，辛苦大家～' } } | ConvertTo-Json -Depth 6;" ^
+  "try { Invoke-RestMethod -Uri $uri -Method Post -ContentType 'application/json; charset=utf-8' -Body $body | Out-Null; exit 0 } catch { exit 1 }"
+if errorlevel 1 (
+  echo [warn] Webhook notification failed, but startup will continue.
+) else (
+  echo [ok] Webhook notification sent.
 )
 
 call :log_step "Open frontend page"

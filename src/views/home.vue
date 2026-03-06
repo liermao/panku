@@ -96,7 +96,6 @@ export default {
       hqtdShow: false,
       mrspShow: false,
       panUaiShow: false,
-      timer: null,
       weatherTimer: null,
       weatherLocation: '成华区',
       weatherTempText: '--°C',
@@ -109,16 +108,11 @@ export default {
     this.marginTopFun()
     this.tabName = '0'
     this.applyTabState('0')
-    this.tabFun()
     this.loadWeather()
     this.startWeatherTimer()
     window.addEventListener('resize', this.handleResize)
   },
   beforeUnmount() {
-    if (this.timer) {
-      clearInterval(this.timer)
-      this.timer = null
-    }
     if (this.weatherTimer) {
       clearInterval(this.weatherTimer)
       this.weatherTimer = null
@@ -148,17 +142,6 @@ export default {
     handleClick(tab) {
       this.tabName = String(tab.index)
       this.applyTabState(this.tabName)
-    },
-    tabFun() {
-      this.timer = setInterval(() => {
-        const next = Number(this.tabName) + 1
-        if (next === 5) {
-          this.tabName = '0'
-        } else {
-          this.tabName = String(next)
-        }
-        this.applyTabState(this.tabName)
-      }, 180000)
     },
     startWeatherTimer() {
       this.weatherTimer = setInterval(() => {
