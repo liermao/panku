@@ -121,24 +121,33 @@ set "EDGE_X86=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
 set "EDGE_X64=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
 set "CHROME_X64=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
 set "CHROME_X86=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
+set "OPEN_SCRIPT=%ROOT%\scripts\windows\open-browser-fullscreen.ps1"
 
 if exist "%EDGE_X86%" (
-  start "" "%EDGE_X86%" --kiosk "%OPEN_URL%" --edge-kiosk-type=fullscreen
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPEN_SCRIPT%" -BrowserExe "%EDGE_X86%" -Url "%OPEN_URL%" -Mode edge
+  if not errorlevel 1 exit /b 0
+  start "" "%EDGE_X86%" --new-window --kiosk "%OPEN_URL%" --edge-kiosk-type=fullscreen
   exit /b 0
 )
 
 if exist "%EDGE_X64%" (
-  start "" "%EDGE_X64%" --kiosk "%OPEN_URL%" --edge-kiosk-type=fullscreen
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPEN_SCRIPT%" -BrowserExe "%EDGE_X64%" -Url "%OPEN_URL%" -Mode edge
+  if not errorlevel 1 exit /b 0
+  start "" "%EDGE_X64%" --new-window --kiosk "%OPEN_URL%" --edge-kiosk-type=fullscreen
   exit /b 0
 )
 
 if exist "%CHROME_X64%" (
-  start "" "%CHROME_X64%" --start-fullscreen "%OPEN_URL%"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPEN_SCRIPT%" -BrowserExe "%CHROME_X64%" -Url "%OPEN_URL%" -Mode chrome
+  if not errorlevel 1 exit /b 0
+  start "" "%CHROME_X64%" --new-window --start-fullscreen "%OPEN_URL%"
   exit /b 0
 )
 
 if exist "%CHROME_X86%" (
-  start "" "%CHROME_X86%" --start-fullscreen "%OPEN_URL%"
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPEN_SCRIPT%" -BrowserExe "%CHROME_X86%" -Url "%OPEN_URL%" -Mode chrome
+  if not errorlevel 1 exit /b 0
+  start "" "%CHROME_X86%" --new-window --start-fullscreen "%OPEN_URL%"
   exit /b 0
 )
 
