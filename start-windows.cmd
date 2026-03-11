@@ -5,6 +5,7 @@ set "FORCE_BUILD=%FORCE_BUILD%"
 if not defined FORCE_BUILD set "FORCE_BUILD=0"
 if /I "%~1"=="--rebuild" set "FORCE_BUILD=1"
 if /I "%~1"=="-r" set "FORCE_BUILD=1"
+if not defined STARTUP_FAST_BUILD set "STARTUP_FAST_BUILD=1"
 
 set /a STEP_TOTAL=11
 set /a STEP_CURRENT=0
@@ -56,15 +57,26 @@ if "%FORCE_BUILD%"=="1" (
 )
 
 if /I "%NEED_BUILD%"=="NO" (
+  echo [info] Frontend source unchanged. Skip build.
   echo [ok] Frontend bundle is up to date. Skip build.
-) else (
-  if "%FORCE_BUILD%"=="1" (
-    echo [info] FORCE_BUILD enabled. Running npm run build...
-  ) else (
-    echo [info] Frontend source changed or build output missing. Running npm run build...
+  if not exist "%ROOT%\panku\.build-source-hash" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\needs-build.ps1" -ProjectRoot "%ROOT%" -WriteSignature >nul 2>nul
   )
-  call npm run build
+) else (
+  set "BUILD_ARGS="
+  if "%STARTUP_FAST_BUILD%"=="1" set "BUILD_ARGS=-- --minify=false"
+  if "%FORCE_BUILD%"=="1" (
+    echo [info] FORCE_BUILD enabled. Running npm run build %BUILD_ARGS% ...
+  ) else (
+    echo [info] Frontend source changed or build output missing. Running npm run build %BUILD_ARGS% ...
+    echo [info] First startup may take 1-3 minutes on slow disks.
+  )
+  call npm run build %BUILD_ARGS%
   if errorlevel 1 goto :fail
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\needs-build.ps1" -ProjectRoot "%ROOT%" -WriteSignature >nul 2>nul
+  if errorlevel 1 (
+    echo [warn] Failed to update frontend build signature.
+  )
 )
 
 call :log_step "Ensure local ffmpeg exists"

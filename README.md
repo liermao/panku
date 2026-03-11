@@ -74,6 +74,12 @@ If you want to force rebuild once, run:
 start-windows-rebuild.cmd
 ```
 
+Startup script optimization:
+
+- Startup auto-checks source changes and rebuilds only when needed.
+- Build check uses source signature (content hash), not file timestamps.
+- When rebuild is required, startup uses fast build (`--minify=false`) to reduce first-run blocking.
+
 ### Lint with [ESLint](https://eslint.org/)
 
 ```sh
