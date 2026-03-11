@@ -404,6 +404,45 @@ export default {
       video.setAttribute('muted', 'true')
       video.setAttribute('playsinline', 'true')
 
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          lowLatencyMode: false,
+          maxBufferLength: 30,
+          backBufferLength: 30,
+          liveSyncDurationCount: 6,
+          liveMaxLatencyDurationCount: 12,
+          manifestLoadingTimeOut: 20000,
+          levelLoadingTimeOut: 20000,
+          fragLoadingTimeOut: 20000,
+          manifestLoadingMaxRetry: 1,
+          levelLoadingMaxRetry: 1,
+          fragLoadingMaxRetry: 1,
+          manifestLoadingRetryDelay: 2000,
+          levelLoadingRetryDelay: 2000,
+          fragLoadingRetryDelay: 2000
+        })
+
+        this.hlsMap[cameraId] = hls
+
+        await new Promise((resolve, reject) => {
+          hls.on(Hls.Events.ERROR, (_event, data) => {
+            if (data?.fatal) {
+              reject(new Error(data.details || 'HLS 播放失败'))
+            }
+          })
+          hls.on(Hls.Events.MANIFEST_PARSED, () => resolve())
+          hls.loadSource(playUrl)
+          hls.attachMedia(video)
+        })
+
+        this.tryPlay(video)
+        const ready = await this.waitVideoReady(video)
+        if (!ready) {
+          throw new Error('HLS 首帧超时')
+        }
+        return
+      }
+
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = playUrl
         this.tryPlay(video)
@@ -414,45 +453,12 @@ export default {
         return
       }
 
-      if (!Hls.isSupported()) {
-        throw new Error('当前浏览器不支持 HLS 播放')
-      }
-
-      const hls = new Hls({
-        lowLatencyMode: false,
-        maxBufferLength: 30,
-        backBufferLength: 30,
-        liveSyncDurationCount: 6,
-        liveMaxLatencyDurationCount: 12,
-        manifestLoadingTimeOut: 20000,
-        levelLoadingTimeOut: 20000,
-        fragLoadingTimeOut: 20000,
-        manifestLoadingMaxRetry: 1,
-        levelLoadingMaxRetry: 1,
-        fragLoadingMaxRetry: 1,
-        manifestLoadingRetryDelay: 2000,
-        levelLoadingRetryDelay: 2000,
-        fragLoadingRetryDelay: 2000
-      })
-
-      this.hlsMap[cameraId] = hls
-
-      await new Promise((resolve, reject) => {
-        hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (data?.fatal) {
-            reject(new Error(data.details || 'HLS 播放失败'))
-          }
-        })
-        hls.on(Hls.Events.MANIFEST_PARSED, () => resolve())
-        hls.loadSource(playUrl)
-        hls.attachMedia(video)
-      })
-
-      this.tryPlay(video)
-      const ready = await this.waitVideoReady(video)
-      if (!ready) {
-        throw new Error('HLS 首帧超时')
-      }
+      throw new Error('当前浏览器不支持 HLS 播放')
+    },
+    getPendingWaitMs(maxWaitMs) {
+      const upperBound = Number.isFinite(maxWaitMs) ? maxWaitMs : this.bootstrapMaxWaitMs
+      const candidate = Math.min(45000, upperBound)
+      return Math.max(20000, candidate)
     },
     async startCamera(camera, maxWaitMs = this.bootstrapMaxWaitMs) {
       if (this.playTaskMap[camera.id]) {
@@ -478,8 +484,9 @@ export default {
             const result = await requestPlayableUrl(camera.rtspUrl, this.gatewayUrl, this.requestTimeoutMs)
 
             if (result.pending) {
+              const pendingWaitMs = this.getPendingWaitMs(maxWaitMs)
               // eslint-disable-next-line no-await-in-loop
-              const ready = await this.waitForPlaylistReady(result.playUrl, Math.min(15000, maxWaitMs))
+              const ready = await this.waitForPlaylistReady(result.playUrl, pendingWaitMs)
               if (!ready) {
                 throw new Error('播放清单准备超时')
               }

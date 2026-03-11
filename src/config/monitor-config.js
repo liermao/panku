@@ -5,7 +5,7 @@ export const monitorConfig = {
   gatewayUrl: DEFAULT_GATEWAY,
   displayCount: 7,
   autoPlayOnMount: true,
-  startConcurrency: 7,
+  startConcurrency: 2,
   recoverConcurrency: 1,
   bootstrapMaxWaitMs: 60000,
   frameReadyTimeoutMs: 45000,

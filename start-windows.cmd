@@ -6,7 +6,7 @@ if not defined FORCE_BUILD set "FORCE_BUILD=0"
 if /I "%~1"=="--rebuild" set "FORCE_BUILD=1"
 if /I "%~1"=="-r" set "FORCE_BUILD=1"
 
-set /a STEP_TOTAL=10
+set /a STEP_TOTAL=11
 set /a STEP_CURRENT=0
 set "CURRENT_STAGE=Initializing"
 set "FRONTEND_URL=http://127.0.0.1:8080/?_ts=%RANDOM%%RANDOM%"
@@ -76,6 +76,19 @@ if not exist "%LOCAL_FFMPEG%" (
 )
 
 set "FFMPEG_BIN=%LOCAL_FFMPEG%"
+if not defined VLC_BIN (
+  if exist "%ProgramFiles%\VideoLAN\VLC\vlc.exe" set "VLC_BIN=%ProgramFiles%\VideoLAN\VLC\vlc.exe"
+)
+if not defined VLC_BIN (
+  if exist "%ProgramFiles(x86)%\VideoLAN\VLC\vlc.exe" set "VLC_BIN=%ProgramFiles(x86)%\VideoLAN\VLC\vlc.exe"
+)
+if not defined STREAM_ENGINE (
+  if defined VLC_BIN (
+    set "STREAM_ENGINE=vlc"
+  ) else (
+    set "STREAM_ENGINE=auto"
+  )
+)
 
 call :log_step "Persist ffmpeg environment variables"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\set-ffmpeg-env.ps1" -FfmpegBin "%LOCAL_FFMPEG%"
@@ -83,20 +96,21 @@ if errorlevel 1 (
   echo [warn] Failed to persist user environment variables. Continue with current process env.
 )
 
-call :log_step "Start or reuse backend gateway"
-echo [info] Checking gateway health...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r=Invoke-RestMethod -Uri 'http://127.0.0.1:8080/api/health' -TimeoutSec 2; if($r.ok){exit 0}else{exit 1} } catch { exit 1 }" >nul 2>nul
-if errorlevel 1 (
-  echo [info] Starting backend gateway with local ffmpeg...
-  start "Panku Gateway" cmd /k "cd /d ""%ROOT%"" && set ""FFMPEG_BIN=%LOCAL_FFMPEG%"" && npm run server"
+call :log_step "Restart backend gateway"
+call :stop_gateway_on_8080
+echo [info] Starting backend gateway with local ffmpeg...
+start "Panku Gateway" cmd /k "cd /d ""%ROOT%"" && set ""FFMPEG_BIN=%LOCAL_FFMPEG%"" && set ""STREAM_ENGINE=%STREAM_ENGINE%"" && set ""VLC_BIN=%VLC_BIN%"" && npm run server"
 
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline=(Get-Date).AddSeconds(30); $ok=$false; while((Get-Date)-lt $deadline){ try{ $r=Invoke-RestMethod -Uri 'http://127.0.0.1:8080/api/health' -TimeoutSec 2; if($r.ok){$ok=$true; break}} catch{}; Start-Sleep -Milliseconds 500 }; if($ok){exit 0}else{exit 1}"
-  if errorlevel 1 (
-    echo [error] Backend did not become healthy in time.
-    goto :fail
-  )
-) else (
-  echo [ok] Backend gateway is already running.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline=(Get-Date).AddSeconds(35); $ok=$false; while((Get-Date)-lt $deadline){ try{ $r=Invoke-RestMethod -Uri 'http://127.0.0.1:8080/api/health' -TimeoutSec 2; if($r.ok){$ok=$true; break}} catch{}; Start-Sleep -Milliseconds 500 }; if($ok){exit 0}else{exit 1}"
+if errorlevel 1 (
+  echo [error] Backend did not become healthy in time.
+  goto :fail
+)
+
+call :log_step "Probe first camera via backend API"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\probe-first-camera.ps1" -ProjectRoot "%ROOT%"
+if errorlevel 1 (
+  echo [warn] Probe failed. Monitoring may not display.
 )
 
 call :log_step "Send startup webhook notification"
@@ -109,6 +123,8 @@ if errorlevel 1 (
 )
 
 call :log_step "Open frontend in fullscreen mode"
+call :ensure_gateway_ready
+if errorlevel 1 goto :fail
 echo [info] Opening frontend URL in fullscreen: %FRONTEND_URL%
 call :open_fullscreen "%FRONTEND_URL%"
 
@@ -124,28 +140,28 @@ set "CHROME_X86=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
 set "OPEN_SCRIPT=%ROOT%\scripts\windows\open-browser-fullscreen.ps1"
 
 if exist "%EDGE_X86%" (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPEN_SCRIPT%" -BrowserExe "%EDGE_X86%" -Url "%OPEN_URL%" -Mode edge
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPEN_SCRIPT%" -BrowserExe "%EDGE_X86%" -Url "%OPEN_URL%" -Mode edge >nul 2>nul
   if not errorlevel 1 exit /b 0
   start "" "%EDGE_X86%" --new-window --kiosk "%OPEN_URL%" --edge-kiosk-type=fullscreen
   exit /b 0
 )
 
 if exist "%EDGE_X64%" (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPEN_SCRIPT%" -BrowserExe "%EDGE_X64%" -Url "%OPEN_URL%" -Mode edge
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPEN_SCRIPT%" -BrowserExe "%EDGE_X64%" -Url "%OPEN_URL%" -Mode edge >nul 2>nul
   if not errorlevel 1 exit /b 0
   start "" "%EDGE_X64%" --new-window --kiosk "%OPEN_URL%" --edge-kiosk-type=fullscreen
   exit /b 0
 )
 
 if exist "%CHROME_X64%" (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPEN_SCRIPT%" -BrowserExe "%CHROME_X64%" -Url "%OPEN_URL%" -Mode chrome
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPEN_SCRIPT%" -BrowserExe "%CHROME_X64%" -Url "%OPEN_URL%" -Mode chrome >nul 2>nul
   if not errorlevel 1 exit /b 0
   start "" "%CHROME_X64%" --new-window --start-fullscreen "%OPEN_URL%"
   exit /b 0
 )
 
 if exist "%CHROME_X86%" (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPEN_SCRIPT%" -BrowserExe "%CHROME_X86%" -Url "%OPEN_URL%" -Mode chrome
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%OPEN_SCRIPT%" -BrowserExe "%CHROME_X86%" -Url "%OPEN_URL%" -Mode chrome >nul 2>nul
   if not errorlevel 1 exit /b 0
   start "" "%CHROME_X86%" --new-window --start-fullscreen "%OPEN_URL%"
   exit /b 0
@@ -153,6 +169,35 @@ if exist "%CHROME_X86%" (
 
 echo [warn] Edge/Chrome not found, fallback to default browser.
 start "" "%OPEN_URL%"
+exit /b 0
+
+:stop_gateway_on_8080
+echo [info] Cleaning existing process on port 8080...
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":8080 .*LISTENING"') do (
+  taskkill /PID %%P /F >nul 2>nul
+)
+timeout /t 1 /nobreak >nul
+exit /b 0
+
+:ensure_gateway_ready
+echo [info] Final health check before opening browser...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r=Invoke-RestMethod -Uri 'http://127.0.0.1:8080/api/health' -TimeoutSec 2; if($r.ok){exit 0}else{exit 1} } catch { exit 1 }" >nul 2>nul
+if not errorlevel 1 (
+  echo [ok] Gateway health check passed.
+  exit /b 0
+)
+
+echo [warn] Gateway is unavailable right now. Trying one self-heal restart...
+start "Panku Gateway" cmd /k "cd /d ""%ROOT%"" && set ""FFMPEG_BIN=%LOCAL_FFMPEG%"" && set ""STREAM_ENGINE=%STREAM_ENGINE%"" && set ""VLC_BIN=%VLC_BIN%"" && npm run server"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline=(Get-Date).AddSeconds(35); $ok=$false; while((Get-Date)-lt $deadline){ try{ $r=Invoke-RestMethod -Uri 'http://127.0.0.1:8080/api/health' -TimeoutSec 2; if($r.ok){$ok=$true; break}} catch{}; Start-Sleep -Milliseconds 500 }; if($ok){exit 0}else{exit 1 }"
+if errorlevel 1 (
+  echo [error] Gateway is still unavailable (http://127.0.0.1:8080).
+  echo [hint] Please check the "Panku Gateway" window for startup errors.
+  exit /b 1
+)
+
+echo [ok] Gateway recovered and healthy.
 exit /b 0
 
 :log_step

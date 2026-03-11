@@ -16,6 +16,28 @@ const APP_ROOT = process.env.APP_ROOT || path.resolve(__dirname, '..')
 const LOCAL_FFMPEG_NAME = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
 const LOCAL_FFMPEG_BIN = path.resolve(APP_ROOT, 'bin', LOCAL_FFMPEG_NAME)
 const FFMPEG_BIN = process.env.FFMPEG_BIN || (existsSync(LOCAL_FFMPEG_BIN) ? LOCAL_FFMPEG_BIN : 'ffmpeg')
+function resolveVlcBin() {
+  const explicit = (process.env.VLC_BIN || '').trim()
+  if (explicit && existsSync(explicit)) {
+    return explicit
+  }
+
+  if (process.platform === 'win32') {
+    const candidates = [
+      'C:\\Program Files\\VideoLAN\\VLC\\vlc.exe',
+      'C:\\Program Files (x86)\\VideoLAN\\VLC\\vlc.exe'
+    ]
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) {
+        return candidate
+      }
+    }
+  }
+
+  return ''
+}
+const VLC_BIN = resolveVlcBin()
+const STREAM_ENGINE = (process.env.STREAM_ENGINE || 'auto').trim().toLowerCase()
 const HLS_ROOT = process.env.HLS_ROOT || path.resolve(APP_ROOT, 'public', 'hls')
 const FRONTEND_ROOT = process.env.FRONTEND_ROOT || path.resolve(APP_ROOT, 'panku')
 const WEATHER_LATITUDE = Number(process.env.WEATHER_LATITUDE || 30.6677)
@@ -62,15 +84,32 @@ const metrics = {
 }
 
 const START_COOLDOWN_MS = Number(process.env.START_COOLDOWN_MS || 1500)
+const STREAM_WARMUP_MS = Number(process.env.STREAM_WARMUP_MS || 12000)
+const STREAM_PENDING_MAX_MS = Number(process.env.STREAM_PENDING_MAX_MS || 45000)
+const STALE_SWEEP_INTERVAL_MS = Number(process.env.STALE_SWEEP_INTERVAL_MS || 10000)
 
 function createStreamId(rtspUrl) {
   return crypto.createHash('sha1').update(rtspUrl).digest('hex').slice(0, 12)
 }
 
+function getPlaylistPath(streamId) {
+  return path.join(HLS_ROOT, streamId, 'index.m3u8')
+}
+
+async function hasPlaylist(streamId) {
+  const playlistPath = getPlaylistPath(streamId)
+  try {
+    const stat = await fs.stat(playlistPath)
+    return stat.isFile() && stat.size > 0
+  } catch {
+    return false
+  }
+}
+
 function getTransportAttempts() {
   return process.env.RTSP_TRANSPORTS
     ? process.env.RTSP_TRANSPORTS.split(',').map((item) => item.trim()).filter(Boolean)
-    : ['tcp', 'udp', 'auto']
+    : ['tcp']
 }
 
 function getCodecAttempts() {
@@ -212,6 +251,28 @@ function stopStreamById(streamId) {
   return true
 }
 
+async function sweepStaleStreams() {
+  const now = Date.now()
+  for (const [streamId, record] of streams.entries()) {
+    if (!record || record.ffmpeg.killed) {
+      continue
+    }
+
+    const runningForMs = Math.max(0, now - (record.startedAt || now))
+    if (runningForMs < STREAM_PENDING_MAX_MS) {
+      continue
+    }
+
+    const playlistReady = await hasPlaylist(streamId)
+    if (playlistReady) {
+      continue
+    }
+
+    record.lastError = record.lastError || `stale_stream_no_playlist_${runningForMs}ms`
+    stopStreamById(streamId)
+  }
+}
+
 function buildFfmpegArgs(rtspUrl, transport, outputArgs, timeoutOptionOverride = null) {
   const transportArgs = transport === 'auto' ? [] : ['-rtsp_transport', transport]
   const timeoutUs = process.env.FFMPEG_RW_TIMEOUT_US || '15000000'
@@ -220,13 +281,117 @@ function buildFfmpegArgs(rtspUrl, transport, outputArgs, timeoutOptionOverride =
   return [
     '-hide_banner',
     '-loglevel',
-    process.env.FFMPEG_LOG_LEVEL || 'error',
+    process.env.FFMPEG_LOG_LEVEL || 'warning',
     ...timeoutArgs,
     ...transportArgs,
     '-i',
     rtspUrl,
     ...outputArgs
   ]
+}
+
+function shouldTryVlcFallback() {
+  if (!VLC_BIN) {
+    return false
+  }
+  if (STREAM_ENGINE === 'vlc') {
+    return true
+  }
+  return STREAM_ENGINE === 'auto'
+}
+
+function buildVlcArgs(rtspUrl, playlistPath, segmentPattern) {
+  const segLen = process.env.HLS_TIME || '2'
+  const numSegs = process.env.HLS_LIST_SIZE || '12'
+  const cachingMs = process.env.VLC_NETWORK_CACHING_MS || '1200'
+  const playlistNorm = playlistPath.replace(/\\/g, '/')
+  const segmentNorm = segmentPattern.replace(/\\/g, '/')
+  const indexUrl = 'segment_%04d.ts'
+  const transcode = process.env.VLC_TRANSCODE || 'transcode{vcodec=h264,vb=1800,acodec=none}'
+  const sout = `#${transcode}:std{access=livehttp{seglen=${segLen},delsegs=true,numsegs=${numSegs},index=${playlistNorm},index-url=${indexUrl}},mux=ts,dst=${segmentNorm}}`
+
+  return [
+    '-I',
+    'dummy',
+    '--no-video-title-show',
+    '--rtsp-tcp',
+    '--network-caching',
+    cachingMs,
+    rtspUrl,
+    '--sout',
+    sout,
+    '--sout-keep'
+  ]
+}
+
+async function startStreamWithVlc(rtspUrl, outDir, streamId, waitTimeoutMs) {
+  const playlistPath = path.join(outDir, 'index.m3u8')
+  const segmentPattern = path.join(outDir, 'segment_%04d.ts')
+  await resetDir(outDir)
+
+  const args = buildVlcArgs(rtspUrl, playlistPath, segmentPattern)
+  const vlc = spawn(VLC_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+  let logBuffer = ''
+
+  const record = {
+    streamId,
+    rtspUrl,
+    outDir,
+    ffmpeg: vlc,
+    engine: 'vlc',
+    startedAt: Date.now(),
+    lastError: '',
+    transport: 'tcp',
+    codec: 'h264',
+    timeoutOption: '(vlc)'
+  }
+
+  const onLog = (chunk) => {
+    logBuffer += chunk.toString()
+    if (logBuffer.length > 16384) {
+      logBuffer = logBuffer.slice(-16384)
+    }
+    record.lastError = tailText(logBuffer)
+  }
+  vlc.stdout.on('data', onLog)
+  vlc.stderr.on('data', onLog)
+
+  vlc.on('error', (error) => {
+    record.lastError = error?.message || 'vlc 进程启动失败'
+  })
+
+  vlc.on('exit', () => {
+    if (streams.get(streamId)?.ffmpeg === vlc) {
+      streams.delete(streamId)
+    }
+  })
+
+  streams.set(streamId, record)
+
+  const startAt = Date.now()
+  while (Date.now() - startAt < waitTimeoutMs) {
+    try {
+      await fs.access(playlistPath)
+      return { record, pending: false }
+    } catch {
+      if (vlc.killed || vlc.exitCode !== null) {
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 400))
+    }
+  }
+
+  if (!vlc.killed && vlc.exitCode === null) {
+    vlc.kill('SIGTERM')
+  }
+  streams.delete(streamId)
+
+  throw buildGatewayError('VLC 引擎启动超时，未生成播放清单', [{
+    transport: 'tcp',
+    codec: 'h264',
+    timeoutOption: '(vlc)',
+    message: record.lastError || `VLC 已连接但 ${waitTimeoutMs}ms 内未返回可播放数据`
+  }])
 }
 
 async function runProbe(rtspUrl, transport, timeoutMs, timeoutOption = null) {
@@ -286,17 +451,20 @@ async function runProbe(rtspUrl, transport, timeoutMs, timeoutOption = null) {
 async function startStream(rtspUrl, outDir, streamId) {
   const playlistPath = path.join(outDir, 'index.m3u8')
   const segmentPattern = path.join(outDir, 'segment_%04d.ts')
-  const waitTimeoutMs = Number(process.env.STREAM_READY_TIMEOUT_MS || 10000)
+  const waitTimeoutMs = Number(process.env.STREAM_READY_TIMEOUT_MS || 20000)
   const transportAttempts = getTransportAttempts()
   const codecAttempts = getCodecAttempts()
   const diagnostics = []
 
-  const timeoutOptions = (process.env.FFMPEG_TIMEOUT_OPTION_CANDIDATES || 'rw_timeout,stimeout,')
+  const timeoutOptions = (process.env.FFMPEG_TIMEOUT_OPTION_CANDIDATES || 'rw_timeout')
     .split(',')
     .map((item) => item.trim())
   const timeoutCandidates = timeoutOptions.length ? timeoutOptions : ['']
 
-  for (const timeoutOption of timeoutCandidates) {
+  const ffmpegEnabled = STREAM_ENGINE !== 'vlc'
+
+  if (ffmpegEnabled) {
+    for (const timeoutOption of timeoutCandidates) {
     for (const codec of codecAttempts) {
       for (const transport of transportAttempts) {
     await resetDir(outDir)
@@ -395,14 +563,20 @@ async function startStream(rtspUrl, outDir, streamId) {
       return { record, pending: false }
     }
 
-    // ffmpeg 仍在运行时，先返回 playUrl，让前端尽快开始加载并等待清单就绪。
     if (!ffmpeg.killed && ffmpeg.exitCode === null) {
       const lowerError = (record.lastError || '').toLowerCase()
       const fatalStartError = lowerError.includes('option not found') || lowerError.includes('error opening input')
-      if (!fatalStartError) {
-        return { record, pending: true }
-      }
       ffmpeg.kill('SIGTERM')
+      if (!fatalStartError) {
+        streams.delete(streamId)
+        diagnostics.push({
+          transport,
+          codec,
+          timeoutOption: timeoutOption || '(none)',
+          message: record.lastError || `RTSP 已连接但 ${waitTimeoutMs}ms 内未返回可播放数据`
+        })
+        continue
+      }
     }
     streams.delete(streamId)
     diagnostics.push({
@@ -412,6 +586,20 @@ async function startStream(rtspUrl, outDir, streamId) {
       message: record.lastError || `RTSP 传输方式 ${transport} 失败`
     })
   }
+    }
+    }
+  }
+
+  if (shouldTryVlcFallback()) {
+    try {
+      return await startStreamWithVlc(rtspUrl, outDir, streamId, waitTimeoutMs)
+    } catch (error) {
+      diagnostics.push(...(Array.isArray(error?.diagnostics) ? error.diagnostics : [{
+        transport: 'tcp',
+        codec: 'h264',
+        timeoutOption: '(vlc)',
+        message: error?.message || 'VLC 启动失败'
+      }]))
     }
   }
 
@@ -437,12 +625,28 @@ app.post('/api/stream/start', async (req, res) => {
 
     const existing = streams.get(streamId)
     if (existing && !existing.ffmpeg.killed) {
-      streamStartCooldown.set(streamId, now)
-      return res.json({
-        streamId,
-        playUrl: buildPlayUrl(req, streamId),
-        pending: false
-      })
+      const playlistReady = await hasPlaylist(streamId)
+      if (playlistReady) {
+        streamStartCooldown.set(streamId, now)
+        return res.json({
+          streamId,
+          playUrl: buildPlayUrl(req, streamId),
+          pending: false
+        })
+      }
+
+      const runningForMs = Math.max(0, now - (existing.startedAt || now))
+      if (runningForMs <= STREAM_WARMUP_MS) {
+        streamStartCooldown.set(streamId, now)
+        return res.json({
+          streamId,
+          playUrl: buildPlayUrl(req, streamId),
+          pending: true
+        })
+      }
+
+      existing.lastError = existing.lastError || `playlist_not_ready_after_${runningForMs}ms`
+      stopStreamById(streamId)
     }
 
     const inflight = startingStreams.get(streamId)
@@ -528,7 +732,7 @@ app.post('/api/stream/probe', async (req, res) => {
 
   const timeoutMs = Number(process.env.PROBE_TIMEOUT_MS || 12000)
   const transports = getTransportAttempts()
-  const timeoutOptions = (process.env.FFMPEG_TIMEOUT_OPTION_CANDIDATES || 'rw_timeout,stimeout,')
+  const timeoutOptions = (process.env.FFMPEG_TIMEOUT_OPTION_CANDIDATES || 'rw_timeout')
     .split(',')
     .map((item) => item.trim())
   const timeoutCandidates = timeoutOptions.length ? timeoutOptions : ['']
@@ -593,13 +797,20 @@ app.get('/api/weather', async (_req, res) => {
 })
 
 app.get('/api/stream/list', (_req, res) => {
-  const list = Array.from(streams.values()).map((item) => ({
-    streamId: item.streamId,
-    rtspUrl: item.rtspUrl,
-    startedAt: item.startedAt,
-    running: !item.ffmpeg.killed,
-    lastError: item.lastError
-  }))
+  const now = Date.now()
+  const list = Array.from(streams.values()).map((item) => {
+    const playlistPath = getPlaylistPath(item.streamId)
+    return {
+      streamId: item.streamId,
+      rtspUrl: item.rtspUrl,
+      engine: item.engine || 'ffmpeg',
+      startedAt: item.startedAt,
+      runningForMs: Math.max(0, now - (item.startedAt || now)),
+      running: !item.ffmpeg.killed,
+      playlistReady: existsSync(playlistPath),
+      lastError: item.lastError
+    }
+  })
 
   res.json({ streams: list })
 })
@@ -633,6 +844,13 @@ app.get('/', (_req, res) => {
 
 async function bootstrap() {
   await ensureDir(HLS_ROOT)
+  const sweepTimer = setInterval(() => {
+    sweepStaleStreams().catch(() => {})
+  }, STALE_SWEEP_INTERVAL_MS)
+  if (typeof sweepTimer.unref === 'function') {
+    sweepTimer.unref()
+  }
+
   app.listen(PORT, HOST, () => {
     console.log(`RTSP gateway running at http://${HOST}:${PORT}`)
     console.log('POST /api/stream/start  { rtspUrl }')
