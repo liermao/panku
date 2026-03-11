@@ -38,6 +38,9 @@ function resolveVlcBin() {
 }
 const VLC_BIN = resolveVlcBin()
 const STREAM_ENGINE = (process.env.STREAM_ENGINE || 'auto').trim().toLowerCase()
+const STREAM_ENGINE_NORMALIZED = ['ffmpeg', 'vlc', 'auto', 'auto-vlc', 'vlc-auto'].includes(STREAM_ENGINE)
+  ? STREAM_ENGINE
+  : 'auto'
 const HLS_ROOT = process.env.HLS_ROOT || path.resolve(APP_ROOT, 'public', 'hls')
 const FRONTEND_ROOT = process.env.FRONTEND_ROOT || path.resolve(APP_ROOT, 'panku')
 const WEATHER_LATITUDE = Number(process.env.WEATHER_LATITUDE || 30.6677)
@@ -290,14 +293,19 @@ function buildFfmpegArgs(rtspUrl, transport, outputArgs, timeoutOptionOverride =
   ]
 }
 
-function shouldTryVlcFallback() {
-  if (!VLC_BIN) {
+function isVlcEnabled() {
+  return Boolean(VLC_BIN) && STREAM_ENGINE_NORMALIZED !== 'ffmpeg'
+}
+
+function isFfmpegEnabled() {
+  return STREAM_ENGINE_NORMALIZED !== 'vlc'
+}
+
+function shouldTryVlcFirst() {
+  if (!isVlcEnabled()) {
     return false
   }
-  if (STREAM_ENGINE === 'vlc') {
-    return true
-  }
-  return STREAM_ENGINE === 'auto'
+  return STREAM_ENGINE_NORMALIZED === 'vlc' || STREAM_ENGINE_NORMALIZED === 'auto-vlc' || STREAM_ENGINE_NORMALIZED === 'vlc-auto'
 }
 
 function buildVlcArgs(rtspUrl, playlistPath, segmentPattern) {
@@ -461,7 +469,33 @@ async function startStream(rtspUrl, outDir, streamId) {
     .map((item) => item.trim())
   const timeoutCandidates = timeoutOptions.length ? timeoutOptions : ['']
 
-  const ffmpegEnabled = STREAM_ENGINE !== 'vlc'
+  const ffmpegEnabled = isFfmpegEnabled()
+  const vlcEnabled = isVlcEnabled()
+  const vlcFirst = shouldTryVlcFirst()
+
+  if (STREAM_ENGINE_NORMALIZED === 'vlc' && !VLC_BIN) {
+    throw buildGatewayError('STREAM_ENGINE=vlc 但未检测到 VLC，请安装 VLC 或改为 auto 模式', [])
+  }
+
+  if (!ffmpegEnabled && !vlcEnabled) {
+    throw buildGatewayError('未检测到可用推流引擎，请检查 ffmpeg/VLC 配置', [])
+  }
+
+  if (vlcFirst) {
+    try {
+      return await startStreamWithVlc(rtspUrl, outDir, streamId, waitTimeoutMs)
+    } catch (error) {
+      diagnostics.push(...(Array.isArray(error?.diagnostics) ? error.diagnostics : [{
+        transport: 'tcp',
+        codec: 'h264',
+        timeoutOption: '(vlc)',
+        message: error?.message || 'VLC 启动失败'
+      }]))
+      if (!ffmpegEnabled) {
+        throw buildGatewayError('等待播放清单超时，请检查 RTSP 地址和网络连通性', diagnostics)
+      }
+    }
+  }
 
   if (ffmpegEnabled) {
     for (const timeoutOption of timeoutCandidates) {
@@ -590,7 +624,7 @@ async function startStream(rtspUrl, outDir, streamId) {
     }
   }
 
-  if (shouldTryVlcFallback()) {
+  if (!vlcFirst && vlcEnabled) {
     try {
       return await startStreamWithVlc(rtspUrl, outDir, streamId, waitTimeoutMs)
     } catch (error) {
@@ -674,11 +708,16 @@ app.post('/api/stream/start', async (req, res) => {
       const result = await startStream(rtspUrl, outDir, streamId)
       return { ok: true, result }
     })().catch((error) => {
+      console.warn(`[stream] start failed streamId=${streamId} engine=${STREAM_ENGINE_NORMALIZED}: ${error?.message || 'unknown_error'}`)
+      const diagnostics = Array.isArray(error?.diagnostics) ? error.diagnostics : []
+      if (diagnostics.length) {
+        console.warn('[stream] diagnostics:', JSON.stringify(diagnostics))
+      }
       return {
         ok: false,
         error: {
           message: error?.message || '启动推流失败',
-          diagnostics: error?.diagnostics || []
+          diagnostics
         }
       }
     }).finally(() => {
@@ -853,6 +892,7 @@ async function bootstrap() {
 
   app.listen(PORT, HOST, () => {
     console.log(`RTSP gateway running at http://${HOST}:${PORT}`)
+    console.log(`[stream] engine=${STREAM_ENGINE_NORMALIZED} ffmpeg="${FFMPEG_BIN}" vlc="${VLC_BIN || '(not found)'}"`)
     console.log('POST /api/stream/start  { rtspUrl }')
   })
 }

@@ -51,11 +51,15 @@ What it does automatically:
 
 Backend supports:
 
-- `STREAM_ENGINE=ffmpeg` (default behavior)
+- `STREAM_ENGINE=ffmpeg` (force ffmpeg engine)
 - `STREAM_ENGINE=vlc` (force VLC engine)
-- `STREAM_ENGINE=auto` (ffmpeg first, then VLC fallback when VLC is installed)
+- `STREAM_ENGINE=auto` (default; ffmpeg first, then VLC fallback when VLC is installed)
+- `STREAM_ENGINE=auto-vlc` (VLC first, then ffmpeg fallback)
 
-`start-windows.cmd` defaults to `STREAM_ENGINE=vlc` when VLC is detected on Windows, otherwise uses `auto`.
+`start-windows.cmd` defaults:
+
+- if VLC is detected: `STREAM_ENGINE=auto-vlc`
+- if VLC is not detected: `STREAM_ENGINE=auto`
 
 VLC binary detection on Windows:
 
@@ -78,6 +82,7 @@ Startup script optimization:
 
 - Startup auto-checks source changes and rebuilds only when needed.
 - Build check uses source signature (content hash), not file timestamps.
+- If signature file is missing, startup triggers one rebuild to avoid stale frontend bundle.
 - When rebuild is required, startup uses fast build (`--minify=false`) to reduce first-run blocking.
 
 ### Lint with [ESLint](https://eslint.org/)

@@ -105,20 +105,5 @@ if (Test-Path -LiteralPath $signatureFile) {
   exit 0
 }
 
-$distTime = (Get-Item -LiteralPath $distIndex).LastWriteTimeUtc
-$newerSource = Get-WatchFiles -Root $root |
-  Where-Object { $_.LastWriteTimeUtc -gt $distTime } |
-  Select-Object -First 1
-
-if ($null -ne $newerSource) {
-  Write-Output "YES"
-  exit 0
-}
-
-try {
-  Set-Content -LiteralPath $signatureFile -Value $currentSignature -NoNewline -Encoding ASCII
-} catch {
-}
-
-Write-Output "NO"
+Write-Output "YES"
 exit 0

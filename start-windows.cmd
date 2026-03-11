@@ -96,10 +96,15 @@ if not defined VLC_BIN (
 )
 if not defined STREAM_ENGINE (
   if defined VLC_BIN (
-    set "STREAM_ENGINE=vlc"
+    set "STREAM_ENGINE=auto-vlc"
   ) else (
     set "STREAM_ENGINE=auto"
   )
+)
+if defined VLC_BIN (
+  echo [info] VLC detected. STREAM_ENGINE=%STREAM_ENGINE% (VLC first, ffmpeg fallback)
+) else (
+  echo [info] VLC not found. STREAM_ENGINE=%STREAM_ENGINE%
 )
 
 call :log_step "Persist ffmpeg environment variables"

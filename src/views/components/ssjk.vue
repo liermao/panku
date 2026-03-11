@@ -335,8 +335,59 @@ export default {
         video.load()
       }
     },
+    resolveStreamListUrl() {
+      const gateway = (this.gatewayUrl || DEFAULT_GATEWAY || '').trim()
+      if (gateway.includes('/api/stream/start')) {
+        return gateway.replace(/\/api\/stream\/start(?:\?.*)?$/i, '/api/stream/list')
+      }
+
+      if (typeof window !== 'undefined' && window.location) {
+        const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
+        const host = window.location.hostname || 'localhost'
+        return `${protocol}//${host}:8080/api/stream/list`
+      }
+      return 'http://localhost:8080/api/stream/list'
+    },
+    extractStreamIdFromPlayUrl(playUrl) {
+      const match = String(playUrl || '').match(/\/hls\/([^/]+)\/index\.m3u8(?:$|\?)/i)
+      return match?.[1] || ''
+    },
+    async isStreamStillRunning(streamId) {
+      if (!streamId) {
+        return true
+      }
+
+      const controller = new AbortController()
+      const timeoutMs = Math.max(1500, this.requestTimeoutMs - 1000)
+      const timer = setTimeout(() => controller.abort(), timeoutMs)
+      try {
+        const response = await fetch(this.resolveStreamListUrl(), {
+          method: 'GET',
+          cache: 'no-store',
+          signal: controller.signal
+        })
+        if (!response.ok) {
+          return true
+        }
+        const payload = await response.json().catch(() => null)
+        const list = Array.isArray(payload?.streams) ? payload.streams : []
+        const current = list.find((item) => item?.streamId === streamId)
+        if (!current) {
+          return false
+        }
+        return Boolean(current.running)
+      } catch {
+        // 网络抖动时不做负判断，避免误杀重试
+        return true
+      } finally {
+        clearTimeout(timer)
+      }
+    },
     async waitForPlaylistReady(playUrl, maxWaitMs) {
       const deadline = Date.now() + maxWaitMs
+      const streamId = this.extractStreamIdFromPlayUrl(playUrl)
+      const stateProbeIntervalMs = Math.max(this.pendingRetryDelayMs * 2, 3000)
+      let nextStateProbeAt = Date.now() + stateProbeIntervalMs
       while (!this.isUnmounted && Date.now() < deadline) {
         try {
           // eslint-disable-next-line no-await-in-loop
@@ -347,6 +398,16 @@ export default {
         } catch {
           // ignore
         }
+
+        if (streamId && Date.now() >= nextStateProbeAt) {
+          // eslint-disable-next-line no-await-in-loop
+          const stillRunning = await this.isStreamStillRunning(streamId)
+          if (!stillRunning) {
+            return false
+          }
+          nextStateProbeAt = Date.now() + stateProbeIntervalMs
+        }
+
         // eslint-disable-next-line no-await-in-loop
         await sleep(this.pendingRetryDelayMs)
       }
