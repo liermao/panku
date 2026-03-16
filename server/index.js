@@ -490,7 +490,8 @@ async function startStream(rtspUrl, outDir, streamId) {
   const timeoutOptions = (process.env.FFMPEG_TIMEOUT_OPTION_CANDIDATES || 'rw_timeout,stimeout')
     .split(',')
     .map((item) => item.trim())
-  const timeoutCandidates = timeoutOptions.length ? timeoutOptions : ['']
+    .filter((item) => item.length > 0)
+  const timeoutCandidates = Array.from(new Set([...timeoutOptions, '']))
 
   const ffmpegEnabled = isFfmpegEnabled()
   const vlcEnabled = isVlcEnabled()
@@ -797,7 +798,8 @@ app.post('/api/stream/probe', async (req, res) => {
   const timeoutOptions = (process.env.FFMPEG_TIMEOUT_OPTION_CANDIDATES || 'rw_timeout,stimeout')
     .split(',')
     .map((item) => item.trim())
-  const timeoutCandidates = timeoutOptions.length ? timeoutOptions : ['']
+    .filter((item) => item.length > 0)
+  const timeoutCandidates = Array.from(new Set([...timeoutOptions, '']))
   const results = []
 
   for (const timeoutOption of timeoutCandidates) {

@@ -78,6 +78,7 @@ Backend defaults (override via env if needed):
 - `STREAM_READY_TIMEOUT_MS=30000`
 - `START_SYNC_WAIT_MS=2500`
 - `FFMPEG_TIMEOUT_OPTION_CANDIDATES=rw_timeout,stimeout`
+- If timeout options are unsupported, backend will retry without timeout flags.
 
 If you want to force rebuild once, run:
 
