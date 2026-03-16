@@ -94,6 +94,13 @@ if not defined VLC_BIN (
 if not defined VLC_BIN (
   if exist "%ProgramFiles(x86)%\VideoLAN\VLC\vlc.exe" set "VLC_BIN=%ProgramFiles(x86)%\VideoLAN\VLC\vlc.exe"
 )
+if not defined VLC_BIN (
+  for /f "delims=" %%I in ('where vlc 2^>nul') do (
+    set "VLC_BIN=%%I"
+    goto :vlc_done
+  )
+)
+:vlc_done
 if not defined STREAM_ENGINE (
   if defined VLC_BIN (
     set "STREAM_ENGINE=auto-vlc"
@@ -130,14 +137,14 @@ if errorlevel 1 (
   echo [warn] Probe failed. Monitoring may not display.
 )
 
-call :log_step "Send startup webhook notification"
-echo [info] Sending WeCom startup notification...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\send-wecom-notice.ps1" -WebhookUrl "%WX_WEBHOOK_URL%"
-if errorlevel 1 (
-  echo [warn] Webhook notification failed, but startup will continue.
-) else (
-  echo [ok] Webhook notification sent.
-)
+rem call :log_step "Send startup webhook notification"
+rem echo [info] Sending WeCom startup notification...
+rem powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\send-wecom-notice.ps1" -WebhookUrl "%WX_WEBHOOK_URL%"
+rem if errorlevel 1 (
+rem   echo [warn] Webhook notification failed, but startup will continue.
+rem ) else (
+rem   echo [ok] Webhook notification sent.
+rem )
 
 call :log_step "Open frontend in fullscreen mode"
 call :ensure_gateway_ready

@@ -16,10 +16,33 @@ const APP_ROOT = process.env.APP_ROOT || path.resolve(__dirname, '..')
 const LOCAL_FFMPEG_NAME = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
 const LOCAL_FFMPEG_BIN = path.resolve(APP_ROOT, 'bin', LOCAL_FFMPEG_NAME)
 const FFMPEG_BIN = process.env.FFMPEG_BIN || (existsSync(LOCAL_FFMPEG_BIN) ? LOCAL_FFMPEG_BIN : 'ffmpeg')
+function resolveVlcFromPath() {
+  const envPath = process.env.PATH || ''
+  if (!envPath) {
+    return ''
+  }
+  const separator = process.platform === 'win32' ? ';' : ':'
+  const paths = envPath.split(separator).map((item) => item.trim()).filter(Boolean)
+  const names = process.platform === 'win32' ? ['vlc.exe', 'vlc'] : ['vlc']
+  for (const base of paths) {
+    for (const name of names) {
+      const candidate = path.join(base, name)
+      if (existsSync(candidate)) {
+        return candidate
+      }
+    }
+  }
+  return ''
+}
 function resolveVlcBin() {
   const explicit = (process.env.VLC_BIN || '').trim()
   if (explicit && existsSync(explicit)) {
     return explicit
+  }
+
+  const fromPath = resolveVlcFromPath()
+  if (fromPath) {
+    return fromPath
   }
 
   if (process.platform === 'win32') {
@@ -112,7 +135,7 @@ async function hasPlaylist(streamId) {
 function getTransportAttempts() {
   return process.env.RTSP_TRANSPORTS
     ? process.env.RTSP_TRANSPORTS.split(',').map((item) => item.trim()).filter(Boolean)
-    : ['tcp']
+    : ['tcp', 'udp']
 }
 
 function getCodecAttempts() {
@@ -459,12 +482,12 @@ async function runProbe(rtspUrl, transport, timeoutMs, timeoutOption = null) {
 async function startStream(rtspUrl, outDir, streamId) {
   const playlistPath = path.join(outDir, 'index.m3u8')
   const segmentPattern = path.join(outDir, 'segment_%04d.ts')
-  const waitTimeoutMs = Number(process.env.STREAM_READY_TIMEOUT_MS || 20000)
+  const waitTimeoutMs = Number(process.env.STREAM_READY_TIMEOUT_MS || 30000)
   const transportAttempts = getTransportAttempts()
   const codecAttempts = getCodecAttempts()
   const diagnostics = []
 
-  const timeoutOptions = (process.env.FFMPEG_TIMEOUT_OPTION_CANDIDATES || 'rw_timeout')
+  const timeoutOptions = (process.env.FFMPEG_TIMEOUT_OPTION_CANDIDATES || 'rw_timeout,stimeout')
     .split(',')
     .map((item) => item.trim())
   const timeoutCandidates = timeoutOptions.length ? timeoutOptions : ['']
@@ -726,7 +749,7 @@ app.post('/api/stream/start', async (req, res) => {
 
     startingStreams.set(streamId, startTask)
 
-    const syncWaitMs = Number(process.env.START_SYNC_WAIT_MS || 1200)
+    const syncWaitMs = Number(process.env.START_SYNC_WAIT_MS || 2500)
     const quickResult = await Promise.race([
       startTask,
       new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), syncWaitMs))
@@ -771,7 +794,7 @@ app.post('/api/stream/probe', async (req, res) => {
 
   const timeoutMs = Number(process.env.PROBE_TIMEOUT_MS || 12000)
   const transports = getTransportAttempts()
-  const timeoutOptions = (process.env.FFMPEG_TIMEOUT_OPTION_CANDIDATES || 'rw_timeout')
+  const timeoutOptions = (process.env.FFMPEG_TIMEOUT_OPTION_CANDIDATES || 'rw_timeout,stimeout')
     .split(',')
     .map((item) => item.trim())
   const timeoutCandidates = timeoutOptions.length ? timeoutOptions : ['']

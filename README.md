@@ -72,6 +72,13 @@ Or set explicit path:
 VLC_BIN=your\path\to\vlc.exe
 ```
 
+Backend defaults (override via env if needed):
+
+- `RTSP_TRANSPORTS=tcp,udp`
+- `STREAM_READY_TIMEOUT_MS=30000`
+- `START_SYNC_WAIT_MS=2500`
+- `FFMPEG_TIMEOUT_OPTION_CANDIDATES=rw_timeout,stimeout`
+
 If you want to force rebuild once, run:
 
 ```text
