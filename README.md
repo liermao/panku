@@ -89,7 +89,8 @@ start-windows-rebuild.cmd
 Startup script optimization:
 
 - Startup auto-checks source changes and rebuilds only when needed.
-- Build check uses source signature (content hash), not file timestamps.
+- Build check uses fast source metadata signature (path + size + mtime), not full file content hash.
+- Runtime cache folders (`public/hls`, `panku/hls`) are excluded from build check to avoid startup stalls.
 - If signature file is missing, startup triggers one rebuild to avoid stale frontend bundle.
 - When rebuild is required, startup uses fast build (`--minify=false`) to reduce first-run blocking.
 

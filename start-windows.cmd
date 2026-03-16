@@ -36,25 +36,37 @@ if errorlevel 1 (
 )
 
 call :log_step "Install dependencies if needed"
+set "NPM_INSTALL_ARGS=--no-audit --no-fund"
 if not exist "%ROOT%\node_modules" (
   echo [info] Installing dependencies...
-  call npm install
+  call npm install %NPM_INSTALL_ARGS%
   if errorlevel 1 goto :fail
 )
 
 if not exist "%ROOT%\node_modules\express" (
   echo [info] Installing missing backend dependencies...
-  call npm install
+  call npm install %NPM_INSTALL_ARGS%
   if errorlevel 1 goto :fail
+)
+if exist "%ROOT%\node_modules\express" (
+  echo [ok] Dependencies ready. Skip npm install.
 )
 
 call :log_step "Build frontend package if needed"
 set "NEED_BUILD=YES"
+set "NEED_BUILD_RESULT="
+echo [info] Checking frontend build signature (runtime hls cache is ignored)...
 if "%FORCE_BUILD%"=="1" (
-  for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\needs-build.ps1" -ProjectRoot "%ROOT%" -ForceBuild`) do set "NEED_BUILD=%%I"
+  for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\needs-build.ps1" -ProjectRoot "%ROOT%" -ForceBuild`) do set "NEED_BUILD_RESULT=%%I"
 ) else (
-  for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\needs-build.ps1" -ProjectRoot "%ROOT%"`) do set "NEED_BUILD=%%I"
+  for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\needs-build.ps1" -ProjectRoot "%ROOT%"`) do set "NEED_BUILD_RESULT=%%I"
 )
+if defined NEED_BUILD_RESULT (
+  set "NEED_BUILD=%NEED_BUILD_RESULT%"
+) else (
+  echo [warn] Build check did not return a result. Fallback to rebuild.
+)
+echo [info] Build check result: %NEED_BUILD%
 
 if /I "%NEED_BUILD%"=="NO" (
   echo [info] Frontend source unchanged. Skip build.

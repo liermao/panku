@@ -9,6 +9,25 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Get-RelativePath {
+  param(
+    [string]$Root,
+    [string]$FullPath
+  )
+
+  return $FullPath.Substring($Root.Length).TrimStart('\', '/').Replace('\', '/').ToLowerInvariant()
+}
+
+function Is-IgnoredPath {
+  param(
+    [string]$Root,
+    [string]$FullPath
+  )
+
+  $relative = Get-RelativePath -Root $Root -FullPath $FullPath
+  return $relative.StartsWith('public/hls/') -or $relative.StartsWith('panku/hls/')
+}
+
 function Get-WatchFiles {
   param([string]$Root)
 
@@ -31,10 +50,14 @@ function Get-WatchFiles {
     $entry = Get-Item -LiteralPath $full
     if ($entry.PSIsContainer) {
       Get-ChildItem -LiteralPath $full -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object {
-        [void]$files.Add($_)
+        if (-not (Is-IgnoredPath -Root $Root -FullPath $_.FullName)) {
+          [void]$files.Add($_)
+        }
       }
     } else {
-      [void]$files.Add($entry)
+      if (-not (Is-IgnoredPath -Root $Root -FullPath $entry.FullName)) {
+        [void]$files.Add($entry)
+      }
     }
   }
 
@@ -45,9 +68,8 @@ function Get-SourceSignature {
   param([string]$Root)
 
   $lines = foreach ($file in (Get-WatchFiles -Root $Root)) {
-    $relativePath = $file.FullName.Substring($Root.Length).TrimStart('\', '/').Replace('\', '/').ToLowerInvariant()
-    $fileHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName).Hash.ToLowerInvariant()
-    "$relativePath`:$fileHash"
+    $relativePath = Get-RelativePath -Root $Root -FullPath $file.FullName
+    "$relativePath`:$($file.Length)`:$($file.LastWriteTimeUtc.Ticks)"
   }
 
   $joined = $lines -join "`n"
