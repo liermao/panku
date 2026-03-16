@@ -137,14 +137,14 @@ if errorlevel 1 (
   echo [warn] Probe failed. Monitoring may not display.
 )
 
-rem call :log_step "Send startup webhook notification"
-rem echo [info] Sending WeCom startup notification...
-rem powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\send-wecom-notice.ps1" -WebhookUrl "%WX_WEBHOOK_URL%"
-rem if errorlevel 1 (
-rem   echo [warn] Webhook notification failed, but startup will continue.
-rem ) else (
-rem   echo [ok] Webhook notification sent.
-rem )
+call :log_step "Send startup webhook notification"
+echo [info] Sending WeCom startup notification...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%\scripts\windows\send-wecom-notice.ps1" -WebhookUrl "%WX_WEBHOOK_URL%"
+if errorlevel 1 (
+  echo [warn] Webhook notification failed, but startup will continue.
+) else (
+  echo [ok] Webhook notification sent.
+)
 
 call :log_step "Open frontend in fullscreen mode"
 call :ensure_gateway_ready

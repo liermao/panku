@@ -3,7 +3,7 @@
   <div class="page-mask"></div>
 
   <div class="home-top-wrap">
-    <div class="home-top">
+    <div class="home-top" :style="topBarStyle">
       <div class="left-top">
         <img :src="logo" alt="logo" />
       </div>
@@ -103,6 +103,15 @@ export default {
     }
   },
   components: { Ssjk, Hqtd, szll, mrsp, panUai },
+  computed: {
+    topBarStyle() {
+      const barWidth = Number.isFinite(this.width) && this.width > 0 ? `${this.width}px` : '100%'
+      return {
+        width: barWidth,
+        margin: '8px auto 0'
+      }
+    }
+  },
   mounted() {
     this.rightBlockFun()
     this.marginTopFun()
