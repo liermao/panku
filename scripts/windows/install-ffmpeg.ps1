@@ -26,6 +26,26 @@ function Get-CommandPath {
   }
 }
 
+function Download-Archive {
+  param(
+    [string]$Url,
+    [string]$OutFile
+  )
+
+  $curl = Get-CommandPath -Name 'curl.exe'
+  if (-not [string]::IsNullOrWhiteSpace($curl)) {
+    Write-Info "Downloading via curl (timeout: 15s connect / 180s total)"
+    & $curl -L --fail --retry 1 --connect-timeout 15 --max-time 180 --output $OutFile $Url
+    if ($LASTEXITCODE -ne 0) {
+      throw "curl download failed with exit code $LASTEXITCODE"
+    }
+    return
+  }
+
+  Write-Info "Downloading via Invoke-WebRequest (timeout: 180s)"
+  Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing -TimeoutSec 180
+}
+
 function Test-ZipSignature {
   param([string]$Path)
 
@@ -128,7 +148,7 @@ foreach ($url in $downloadUrls) {
   $archivePath = Join-Path $tempRoot ("ffmpeg-" + [Guid]::NewGuid().ToString('N') + '.zip')
   try {
     Write-Info "Downloading ffmpeg from $url"
-    Invoke-WebRequest -Uri $url -OutFile $archivePath -UseBasicParsing -TimeoutSec 120
+    Download-Archive -Url $url -OutFile $archivePath
 
     if (-not (Test-ZipSignature -Path $archivePath)) {
       throw 'Downloaded file is not a valid zip archive.'
