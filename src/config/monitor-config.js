@@ -3,7 +3,7 @@ import { DEFAULT_GATEWAY } from '@/api/stream'
 
 export const monitorConfig = {
   gatewayUrl: DEFAULT_GATEWAY,
-  displayCount: 7,
+  displayCount: 8,
   autoPlayOnMount: true,
   startConcurrency: 2,
   recoverConcurrency: 1,
@@ -26,6 +26,6 @@ export const monitorConfig = {
     { id: 'cam-5', name: '蓝鲸班', rtspUrl: 'rtsp://admin:a12345678@41.1.7.7/cam/realmonitor?channel=9&subtype=1' },
     { id: 'cam-6', name: '海鹏班', rtspUrl: 'rtsp://admin:a12345678@41.1.7.9/cam/realmonitor?channel=13&subtype=1' },
     { id: 'cam-7', name: '云鹏班', rtspUrl: 'rtsp://admin:a12345678@41.1.7.9/cam/realmonitor?channel=29&subtype=1' },
-    // { id: 'cam-8', name: '监控8', rtspUrl: 'rtsp://admin:a12345678@41.1.7.9/cam/realmonitor?channel=31&subtype=1' }
+    { id: 'cam-8', name: '海豚班', rtspUrl: 'rtsp://admin:a12345678@41.1.7.9/cam/realmonitor?channel=31&subtype=1' }
   ]
 }
