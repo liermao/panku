@@ -46,7 +46,7 @@
               class="animate__animated animate__fadeInDown"
             />
           </el-tab-pane>
-          <el-tab-pane label="每周食谱" name="3">
+          <el-tab-pane v-if="showRecipeTab" label="每周食谱" name="3">
             <mrsp
               v-if="mrspShow"
               :style="{ width: width - 340 + 'px', height: 'calc(100% - 180px)', padding: '80px' }"
@@ -96,6 +96,7 @@ export default {
       hqtdShow: false,
       mrspShow: false,
       panUaiShow: false,
+      showRecipeTab: false,
       weatherTimer: null,
       weatherLocation: '成华区',
       weatherTempText: '--°C',
@@ -149,7 +150,7 @@ export default {
       this.panUaiShow = current === '4'
     },
     handleClick(tab) {
-      this.tabName = String(tab.index)
+      this.tabName = String(tab.props?.name ?? tab.paneName ?? tab.index)
       this.applyTabState(this.tabName)
     },
     startWeatherTimer() {
