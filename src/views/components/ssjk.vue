@@ -703,15 +703,18 @@ export default {
   left: 6px;
   top: 6px;
   z-index: 2;
+  box-sizing: border-box;
+  max-width: calc(100% - 154px);
   color: #fff;
-  font-size: 12px;
+  font-size: clamp(9px, 0.72vw, 11px);
   line-height: 1;
-  padding: 4px 6px;
+  padding: 3px 5px;
   border-radius: 3px;
   background: rgba(15, 23, 42, 0.72);
   display: flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
 }
 
 .dup-tag {
@@ -728,9 +731,9 @@ export default {
   top: 6px;
   z-index: 2;
   color: #fff;
-  font-size: 12px;
+  font-size: clamp(9px, 0.72vw, 11px);
   line-height: 1;
-  padding: 4px 6px;
+  padding: 3px 5px;
   border-radius: 3px;
   background: rgba(15, 23, 42, 0.72);
 }
