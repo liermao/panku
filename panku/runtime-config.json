@@ -18,7 +18,7 @@
     },
     "cameras": [
       { "id": "cam-1", "name": "河豚班", "rtspUrl": "rtsp://admin:a12345678@41.1.7.9/cam/realmonitor?channel=1&subtype=1" },
-      { "id": "cam-2", "name": "海马班", "rtspUrl": "rtsp://admin:a12345678@41.1.7.8/cam/realmonitor?channel=9&subtype=1" },
+      { "id": "cam-2", "name": "海马班", "rtspUrl": "rtsp://admin:a12345678@41.1.7.10/cam/realmonitor?channel=23&subtype=1" },
       { "id": "cam-4", "name": "天鲲班", "rtspUrl": "rtsp://admin:a12345678@41.1.7.9/cam/realmonitor?channel=30&subtype=1" },
       { "id": "cam-5", "name": "水鲸班", "rtspUrl": "rtsp://admin:a12345678@41.1.7.7/cam/realmonitor?channel=9&subtype=1" },
       { "id": "cam-6", "name": "海鹏班", "rtspUrl": "rtsp://admin:a12345678@41.1.7.12/cam/realmonitor?channel=10&subtype=1" },
