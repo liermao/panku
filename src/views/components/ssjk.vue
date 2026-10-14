@@ -748,6 +748,10 @@ export default {
   display: block;
 }
 
+.row-top .video {
+  object-fit: contain;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
