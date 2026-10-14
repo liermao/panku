@@ -648,7 +648,9 @@ export default {
 }
 
 .video-board {
-  width: 100%;
+  width: 96%;
+  max-width: calc((100vh - 220px) * 8 / 3);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -746,10 +748,6 @@ export default {
   border-radius: 2px;
   background: #020617;
   display: block;
-}
-
-.row-top .video {
-  object-fit: contain;
 }
 
 @keyframes spin {
